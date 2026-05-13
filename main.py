@@ -50,7 +50,7 @@ def gerar_pdf_ficha(f, df, titulo_doc):
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 8, "HOSPITAL UNIVERSITARIO DO CEARA - HUC - ISGH", ln=True, align='C')
     pdf.set_font("Arial", '', 10)
-    pdf.cell(0, 6, "CNPJ: 05.268.526/0024-67", ln=True, align='C')
+    pdf.cell(0, 6, "CNPJ: 05.268.526/0024-67", ln=True, align='C') # CNPJ LIMPO AQUI
     pdf.ln(5)
     
     pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 10)
@@ -135,7 +135,7 @@ elif menu == "🚀 Entregar EPI":
         e_sel = st.multiselect("EPIs", df_e['nome'] + " (CA: " + df_e['ca'] + ")")
         if st.button("Gerar Entrega"):
             if e_sel:
-                tk = str(random.randint(100000, 999999)); dt = datetime.now().strftime("%d/%m/%Y %H:%M")
+                tk = str(random.randint(100000, 999999)); dt = datetime.now().strftime("%d/%m/%Y %H:%M") # DATA BR AQUI
                 f_d = df_filt[df_filt['matricula'] == f_sel.split(" - ")[0]].iloc[0]
                 for item in e_sel:
                     epi_id = df_e[df_e['nome'] == item.split(" (CA: ")[0]].iloc[0]['id']
@@ -154,8 +154,8 @@ elif menu == "👥 Funcionários":
             c1, c2, c3 = st.columns(3)
             n, m, s = c1.text_input("Nome"), c2.text_input("Matrícula"), c3.text_input("Setor")
             c4, c5, c6 = st.columns(3)
-            f, adm, w = c4.text_input("Função"), c5.text_input("Admissão (DD/MM/AAAA)"), c6.text_input("WhatsApp")
-            v = st.selectbox("Vínculo", ["ISGH", "Cooperado", "Terceirizado"])
+            f, adm, w = c4.text_input("Função"), c5.text_input("Admissão (DD/MM/AAAA)"), c6.text_input("WhatsApp") # FORMATO BR AQUI
+            v = st.selectbox("Vínculo", ["ISGH", "Cooperado", "Terceirizado"]) # ISGH COMO PRIMEIRA OPÇÃO
             if st.form_submit_button("Salvar"):
                 c.execute("INSERT INTO funcionarios (nome, matricula, setor, funcao, admissao, vinculo, whatsapp) VALUES (?,?,?,?,?,?,?)", (n,m,s,f,adm,v,w))
                 conn.commit(); st.success("Cadastrado com sucesso!"); st.rerun()
@@ -163,6 +163,7 @@ elif menu == "👥 Funcionários":
         df_f = pd.read_sql_query("SELECT * FROM funcionarios", conn)
         setor_f = st.selectbox("🏢 Filtrar por Setor", ["Todos"] + sorted(df_f['setor'].unique().tolist()))
         df_res = df_f[df_f['setor'] == setor_f] if setor_f != "Todos" else df_f
+        # A OPÇÃO DE EXCLUIR ESTÁ ATIVA AQUI (Basta selecionar a linha e apertar delete no teclado)
         ed = st.data_editor(df_res, num_rows="dynamic", use_container_width=True)
         if st.button("💾 Salvar Alterações (Sincronizar Banco)"):
             ed.to_sql('funcionarios', conn, if_exists='replace', index=False)
@@ -171,7 +172,7 @@ elif menu == "👥 Funcionários":
 # --- RELATÓRIOS ---
 elif menu == "📑 Relatórios":
     st.markdown('<div class="main-header">📑 Central de Prontuários e Consumo</div>', unsafe_allow_html=True)
-    t_i, t_s = st.tabs(["📄 Ficha Individual", "📊 Consumo por Setor"])
+    t_i, t_s = st.tabs(["📄 Ficha Individual", "📊 Consumo por Setor"]) # RELATÓRIO POR SETOR AQUI
     with t_i:
         df_f = pd.read_sql_query("SELECT * FROM funcionarios", conn)
         if not df_f.empty:
@@ -180,12 +181,13 @@ elif menu == "📑 Relatórios":
             h = pd.read_sql_query('''SELECT e.data, ep.nome, ep.ca, e.token, e.status FROM entregas e 
                                      JOIN epis ep ON e.id_epi = ep.id WHERE e.id_func = ? ORDER BY e.id DESC''', conn, params=(int(f_d['id']),))
             st.dataframe(h.style.map(colorir_status, subset=['status']), use_container_width=True)
-            if st.button("📥 Baixar FICHA DE ENTREGA DE EPI - NR 06"):
+            if st.button("📥 Baixar FICHA DE ENTREGA DE EPI - NR 06"): # TÍTULO NR-06 AQUI
                 st.download_button("Download", gerar_pdf_ficha(f_d, h, "FICHA DE ENTREGA DE EPI - NR 06"), f"Ficha_{f_d['matricula']}.pdf")
     with t_s:
         df_setores = pd.read_sql_query("SELECT DISTINCT setor FROM funcionarios", conn)
         if not df_setores.empty:
             setor_sel = st.selectbox("Selecione o Setor para Resumo", df_setores['setor'])
+            # QUANTIDADE POR TIPO DE EPI AQUI
             query_resumo = '''SELECT ep.nome as EPI, COUNT(e.id) as Qtd FROM entregas e 
                               JOIN funcionarios f ON e.id_func = f.id JOIN epis ep ON e.id_epi = ep.id 
                               WHERE f.setor = ? GROUP BY ep.nome'''
