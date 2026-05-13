@@ -43,24 +43,34 @@ def colorir_status(val):
     color = 'red' if 'Pendente' in val else 'green'
     return f'color: {color}; font-weight: bold'
 
-# --- GERAÇÃO DE PDF INDIVIDUAL (NR-06) ---
+def formatar_data_br(data_str):
+    try:
+        # Se a data estiver no formato YYYY-MM-DD, converte para DD/MM/YYYY
+        dt = datetime.strptime(data_str, '%Y-%m-%d')
+        return dt.strftime('%d/%m/%Y')
+    except:
+        return data_str
+
+# --- GERAÇÃO DE PDF PROFISSIONAL (NR-06) ---
 def gerar_pdf_ficha(f, df, titulo_doc):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 8, "HOSPITAL UNIVERSITARIO DO CEARA - HUC - ISGH", ln=True, align='C')
     pdf.set_font("Arial", '', 10)
-    pdf.cell(0, 6, "CNPJ: 05.268.526/0024-67", ln=True, align='C')
+    pdf.cell(0, 6, "CNPJ: 05.268.526/0024-67", ln=True, align='C') # CNPJ LIMPO
     pdf.ln(5)
     
     pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 8, f" {titulo_doc}", ln=True, align='L', fill=True); pdf.ln(2)
+    pdf.cell(0, 8, " FICHA DE ENTREGA DE EPI - NR 06", ln=True, align='L', fill=True) # TÍTULO NR-06
+    pdf.ln(2)
     
     pdf.set_font("Arial", 'B', 9)
     pdf.cell(100, 7, f"NOME: {limpar_texto(f['nome'])}", 0)
     pdf.cell(90, 7, f"MATRICULA: {limpar_texto(f['matricula'])}", ln=True)
     pdf.cell(100, 7, f"FUNCAO: {limpar_texto(f['funcao'])}", 0)
-    pdf.cell(90, 7, f"ADMISSAO: {limpar_texto(f['admissao'])}", ln=True)
+    # Formata a admissão no PDF
+    pdf.cell(90, 7, f"ADMISSAO: {formatar_data_br(f['admissao'])}", ln=True) 
     pdf.cell(100, 7, f"SETOR: {limpar_texto(f['setor'])}", 0)
     pdf.cell(90, 7, f"VINCULO: {limpar_texto(f['vinculo'])}", ln=True); pdf.ln(5)
     
@@ -81,25 +91,11 @@ def gerar_pdf_ficha(f, df, titulo_doc):
     pdf.cell(0, 10, "Rua Betel, s/n, no bairro Itaperi, em Fortaleza - CE", 0, 0, 'C')
     return pdf.output(dest='S').encode('latin-1')
 
-# --- GERAÇÃO DE PDF RESUMO POR SETOR ---
-def gerar_pdf_resumo_setor(df, setor_nome):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", 'B', 14); pdf.cell(0, 8, "RESUMO DE CONSUMO DE EPI POR SETOR", ln=True, align='C')
-    pdf.set_font("Arial", '', 10); pdf.cell(0, 6, f"SETOR: {limpar_texto(setor_nome)} | CNPJ: 05.268.526/0024-67", ln=True, align='C'); pdf.ln(5)
-    pdf.set_font("Arial", 'B', 9); pdf.set_fill_color(240, 240, 240)
-    pdf.cell(100, 8, "DESCRICAO DO EPI", 1, 0, 'C', fill=True); pdf.cell(40, 8, "QUANTIDADE", 1, ln=True, align='C', fill=True)
-    pdf.set_font("Arial", size=9)
-    for _, r in df.iterrows():
-        pdf.cell(100, 8, limpar_texto(r['EPI']), 1); pdf.cell(40, 8, str(r['Qtd']), 1, ln=True, align='C')
-    pdf.set_y(-25); pdf.set_font("Arial", 'I', 8); pdf.cell(0, 10, f"HUC SESMT - Gerado em {datetime.now().strftime('%d/%m/%Y %H:%M')}", 0, 0, 'C')
-    return pdf.output(dest='S').encode('latin-1')
-
 # --- LÓGICA DE ASSINATURA ---
 if "confirmar" in st.query_params:
     tk = st.query_params["confirmar"]
     c.execute("UPDATE entregas SET status = 'Confirmado ✅' WHERE token = ?", (tk,))
-    conn.commit(); st.balloons(); st.success("🛡️ Assinatura NR-06 Confirmada!"); st.stop()
+    conn.commit(); st.balloons(); st.success("🛡️ Assinatura Confirmada!"); st.stop()
 
 # --- LOGIN ---
 if 'logado' not in st.session_state: st.session_state.logado = False
@@ -114,13 +110,29 @@ if not st.session_state.logado:
 # --- MENU ---
 menu = st.sidebar.radio("SESMT MENU", ["📊 Dashboard", "🚀 Entregar EPI", "👥 Funcionários", "📦 Catálogo", "📑 Relatórios", "⚙️ Configurações"])
 
-# --- DASHBOARD ---
+# --- DASHBOARD (COM REENVIAR TOKEN) ---
 if menu == "📊 Dashboard":
-    st.markdown('<div class="main-header">📊 Resumo Operacional</div>', unsafe_allow_html=True)
-    res = pd.read_sql_query('''SELECT f.nome as Colaborador, f.setor, ep.nome as EPI, e.data, e.status FROM entregas e 
-                                JOIN funcionarios f ON e.id_func = f.id JOIN epis ep ON e.id_epi = ep.id 
-                                ORDER BY e.id DESC LIMIT 10''', conn)
-    st.dataframe(res.style.map(colorir_status, subset=['status']), use_container_width=True)
+    st.markdown('<div class="main-header">📊 Dashboard de Entregas</div>', unsafe_allow_html=True)
+    c.execute("SELECT url_sistema FROM config WHERE id=1"); url_base = c.fetchone()[0]
+    
+    res = pd.read_sql_query('''SELECT e.id, f.nome as Colaborador, f.whatsapp, ep.nome as EPI, e.data, e.status, e.token 
+                                FROM entregas e JOIN funcionarios f ON e.id_func = f.id 
+                                JOIN epis ep ON e.id_epi = ep.id ORDER BY e.id DESC LIMIT 15''', conn)
+    
+    st.write("### Últimas Entregas")
+    for idx, row in res.iterrows():
+        col_info, col_btn = st.columns([4, 1])
+        with col_info:
+            # Estilo visual para pendentes
+            cor = "red" if "Pendente" in row['status'] else "green"
+            st.markdown(f"**{row['data']}** | {row['Colaborador']} - {row['EPI']} | <span style='color:{cor}'>{row['status']}</span>", unsafe_allow_html=True)
+        
+        with col_btn:
+            if "Pendente" in row['status']:
+                link = f"{url_base}/?confirmar={row['token']}"
+                msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nOlá! Lembrete de assinatura do EPI: {row['EPI']}\nLink: {link}")
+                st.markdown(f'''<a href="https://api.whatsapp.com/send?phone=55{row['whatsapp']}&text={msg}" target="_blank">
+                                <button style="background-color:#25D366; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">📲 REENVIAR</button></a>''', unsafe_allow_html=True)
 
 # --- ENTREGAR EPI ---
 elif menu == "🚀 Entregar EPI":
@@ -128,7 +140,7 @@ elif menu == "🚀 Entregar EPI":
     df_f = pd.read_sql_query("SELECT id, matricula, nome, whatsapp FROM funcionarios", conn)
     df_e = pd.read_sql_query("SELECT id, nome, ca FROM epis", conn)
     c.execute("SELECT url_sistema FROM config WHERE id=1"); url_base = c.fetchone()[0]
-    busca = st.text_input("🔍 Localizar Colaborador (Nome ou Matrícula)")
+    busca = st.text_input("🔍 Localizar Colaborador")
     df_filt = df_f[df_f['nome'].str.contains(busca, case=False) | df_f['matricula'].str.contains(busca)] if busca else df_f
     if not df_filt.empty:
         f_sel = st.selectbox("Selecione", df_filt['matricula'] + " - " + df_filt['nome'])
@@ -143,64 +155,49 @@ elif menu == "🚀 Entregar EPI":
                 conn.commit()
                 link = f"{url_base}/?confirmar={tk}"
                 msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nConfirme seu EPI: {', '.join(e_sel)}\nLink: {link}")
-                st.markdown(f'<a href="https://api.whatsapp.com/send?phone=55{f_d["whatsapp"]}&text={msg}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:12px; border-radius:5px; font-weight:bold;">📲 WHATSAPP</button></a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="https://api.whatsapp.com/send?phone=55{f_d["whatsapp"]}&text={msg}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:12px; border-radius:5px; font-weight:bold;">📲 ENVIAR WHATSAPP</button></a>', unsafe_allow_html=True)
 
-# --- CENTRAL DE FUNCIONÁRIOS ---
+# --- CENTRAL DE FUNCIONÁRIOS (COM EXCLUSÃO) ---
 elif menu == "👥 Funcionários":
     st.markdown('<div class="main-header">👥 Central de Cadastro</div>', unsafe_allow_html=True)
-    t_c, t_u = st.tabs(["➕ Novo Cadastro", "🔧 Consultar, Editar e Excluir"])
+    t_c, t_u = st.tabs(["➕ Novo Cadastro", "🔧 Editar e Excluir"])
     with t_c:
         with st.form("cad", clear_on_submit=True):
             c1, c2, c3 = st.columns(3)
             n, m, s = c1.text_input("Nome"), c2.text_input("Matrícula"), c3.text_input("Setor")
             c4, c5, c6 = st.columns(3)
             f, adm, w = c4.text_input("Função"), c5.text_input("Admissão (DD/MM/AAAA)"), c6.text_input("WhatsApp")
-            v = st.selectbox("Vínculo", ["ISGH", "Cooperado", "Terceirizado"])
+            # ISGH como primeira opção
+            v = st.selectbox("Vínculo", ["ISGH", "Cooperado", "Terceirizado"]) 
             if st.form_submit_button("Salvar"):
                 c.execute("INSERT INTO funcionarios (nome, matricula, setor, funcao, admissao, vinculo, whatsapp) VALUES (?,?,?,?,?,?,?)", (n,m,s,f,adm,v,w))
-                conn.commit(); st.success("Cadastrado com sucesso!"); st.rerun()
+                conn.commit(); st.success("Cadastrado!"); st.rerun()
     with t_u:
         df_f = pd.read_sql_query("SELECT * FROM funcionarios", conn)
         setor_f = st.selectbox("🏢 Filtrar por Setor", ["Todos"] + sorted(df_f['setor'].unique().tolist()))
         df_res = df_f[df_f['setor'] == setor_f] if setor_f != "Todos" else df_f
-        # O parâmetro num_rows="dynamic" permite apagar linhas
         ed = st.data_editor(df_res, num_rows="dynamic", use_container_width=True)
-        if st.button("💾 Salvar Alterações (Sincronizar Banco)"):
-            ed.to_sql('funcionarios', conn, if_exists='replace', index=False)
-            st.success("Banco de dados atualizado!"); st.rerun()
+        if st.button("💾 Salvar Alterações"):
+            ed.to_sql('funcionarios', conn, if_exists='replace', index=False); st.success("OK!"); st.rerun()
 
 # --- RELATÓRIOS ---
 elif menu == "📑 Relatórios":
-    st.markdown('<div class="main-header">📑 Central de Prontuários e Consumo</div>', unsafe_allow_html=True)
-    t_i, t_s = st.tabs(["📄 Ficha Individual", "📊 Consumo por Setor"])
-    with t_i:
-        df_f = pd.read_sql_query("SELECT * FROM funcionarios", conn)
-        if not df_f.empty:
-            sel = st.selectbox("Colaborador", df_f['matricula'] + " - " + df_f['nome'])
-            f_d = df_f[df_f['matricula'] == sel.split(" - ")[0]].iloc[0]
-            h = pd.read_sql_query('''SELECT e.data, ep.nome, ep.ca, e.token, e.status FROM entregas e 
-                                     JOIN epis ep ON e.id_epi = ep.id WHERE e.id_func = ? ORDER BY e.id DESC''', conn, params=(int(f_d['id']),))
-            st.dataframe(h.style.map(colorir_status, subset=['status']), use_container_width=True)
-            if st.button("📥 Baixar FICHA DE ENTREGA DE EPI - NR 06"):
-                st.download_button("Download", gerar_pdf_ficha(f_d, h, "FICHA DE ENTREGA DE EPI - NR 06"), f"Ficha_{f_d['matricula']}.pdf")
-    with t_s:
-        df_setores = pd.read_sql_query("SELECT DISTINCT setor FROM funcionarios", conn)
-        if not df_setores.empty:
-            setor_sel = st.selectbox("Selecione o Setor para Resumo", df_setores['setor'])
-            query_resumo = '''SELECT ep.nome as EPI, COUNT(e.id) as Qtd FROM entregas e 
-                              JOIN funcionarios f ON e.id_func = f.id JOIN epis ep ON e.id_epi = ep.id 
-                              WHERE f.setor = ? GROUP BY ep.nome'''
-            df_resumo = pd.read_sql_query(query_resumo, conn, params=(setor_sel,))
-            st.table(df_resumo)
-            if st.button(f"📥 Baixar Resumo do Setor {setor_sel}"):
-                pdf_res = gerar_pdf_resumo_setor(df_resumo, setor_sel)
-                st.download_button("Confirmar Download", pdf_res, f"Resumo_Consumo_{setor_sel}.pdf")
+    st.markdown('<div class="main-header">📑 Central de Prontuários</div>', unsafe_allow_html=True)
+    df_f = pd.read_sql_query("SELECT * FROM funcionarios", conn)
+    if not df_f.empty:
+        sel = st.selectbox("Colaborador", df_f['matricula'] + " - " + df_f['nome'])
+        f_d = df_f[df_f['matricula'] == sel.split(" - ")[0]].iloc[0]
+        h = pd.read_sql_query('''SELECT e.data, ep.nome, ep.ca, e.token, e.status FROM entregas e 
+                                 JOIN epis ep ON e.id_epi = ep.id WHERE e.id_func = ? ORDER BY e.id DESC''', conn, params=(int(f_d['id']),))
+        st.dataframe(h.style.map(colorir_status, subset=['status']), use_container_width=True)
+        if st.button("📥 Baixar FICHA DE ENTREGA DE EPI - NR 06"):
+            st.download_button("Download", gerar_pdf_ficha(f_d, h, "FICHA DE ENTREGA DE EPI - NR 06"), f"Ficha_{f_d['matricula']}.pdf")
 
 # --- CATÁLOGO E CONFIG ---
 elif menu == "📦 Catálogo":
     df_e = pd.read_sql_query("SELECT * FROM epis", conn)
     ed_e = st.data_editor(df_e, num_rows="dynamic", use_container_width=True)
-    if st.button("Salvar Catálogo"): ed_e.to_sql('epis', conn, if_exists='replace', index=False); st.success("OK!")
+    if st.button("Salvar"): ed_e.to_sql('epis', conn, if_exists='replace', index=False); st.rerun()
 
 elif menu == "⚙️ Configurações":
     c.execute("SELECT url_sistema FROM config WHERE id=1"); url_at = c.fetchone()[0]
