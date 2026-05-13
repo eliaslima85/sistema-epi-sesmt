@@ -45,7 +45,7 @@ def colorir_status(val):
 
 def formatar_data_br(data_str):
     try:
-        # Se a data estiver no formato YYYY-MM-DD, converte para DD/MM/YYYY
+        # Tenta converter de YYYY-MM-DD para DD/MM/YYYY
         dt = datetime.strptime(data_str, '%Y-%m-%d')
         return dt.strftime('%d/%m/%Y')
     except:
@@ -69,8 +69,7 @@ def gerar_pdf_ficha(f, df, titulo_doc):
     pdf.cell(100, 7, f"NOME: {limpar_texto(f['nome'])}", 0)
     pdf.cell(90, 7, f"MATRICULA: {limpar_texto(f['matricula'])}", ln=True)
     pdf.cell(100, 7, f"FUNCAO: {limpar_texto(f['funcao'])}", 0)
-    # Formata a admissão no PDF
-    pdf.cell(90, 7, f"ADMISSAO: {formatar_data_br(f['admissao'])}", ln=True) 
+    pdf.cell(90, 7, f"ADMISSAO: {formatar_data_br(f['admissao'])}", ln=True) # DATA FORMATADA
     pdf.cell(100, 7, f"SETOR: {limpar_texto(f['setor'])}", 0)
     pdf.cell(90, 7, f"VINCULO: {limpar_texto(f['vinculo'])}", ln=True); pdf.ln(5)
     
@@ -119,18 +118,17 @@ if menu == "📊 Dashboard":
                                 FROM entregas e JOIN funcionarios f ON e.id_func = f.id 
                                 JOIN epis ep ON e.id_epi = ep.id ORDER BY e.id DESC LIMIT 15''', conn)
     
-    st.write("### Últimas Entregas")
+    st.write("### Últimas Atividades")
     for idx, row in res.iterrows():
         col_info, col_btn = st.columns([4, 1])
         with col_info:
-            # Estilo visual para pendentes
             cor = "red" if "Pendente" in row['status'] else "green"
             st.markdown(f"**{row['data']}** | {row['Colaborador']} - {row['EPI']} | <span style='color:{cor}'>{row['status']}</span>", unsafe_allow_html=True)
         
         with col_btn:
             if "Pendente" in row['status']:
                 link = f"{url_base}/?confirmar={row['token']}"
-                msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nOlá! Lembrete de assinatura do EPI: {row['EPI']}\nLink: {link}")
+                msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nOlá! Confirmação pendente de EPI: {row['EPI']}\nLink: {link}")
                 st.markdown(f'''<a href="https://api.whatsapp.com/send?phone=55{row['whatsapp']}&text={msg}" target="_blank">
                                 <button style="background-color:#25D366; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">📲 REENVIAR</button></a>''', unsafe_allow_html=True)
 
@@ -157,7 +155,7 @@ elif menu == "🚀 Entregar EPI":
                 msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nConfirme seu EPI: {', '.join(e_sel)}\nLink: {link}")
                 st.markdown(f'<a href="https://api.whatsapp.com/send?phone=55{f_d["whatsapp"]}&text={msg}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:12px; border-radius:5px; font-weight:bold;">📲 ENVIAR WHATSAPP</button></a>', unsafe_allow_html=True)
 
-# --- CENTRAL DE FUNCIONÁRIOS (COM EXCLUSÃO) ---
+# --- CENTRAL DE FUNCIONÁRIOS ---
 elif menu == "👥 Funcionários":
     st.markdown('<div class="main-header">👥 Central de Cadastro</div>', unsafe_allow_html=True)
     t_c, t_u = st.tabs(["➕ Novo Cadastro", "🔧 Editar e Excluir"])
