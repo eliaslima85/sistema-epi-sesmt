@@ -45,31 +45,30 @@ def colorir_status(val):
 
 def formatar_data_br(data_str):
     try:
-        # Tenta converter de YYYY-MM-DD para DD/MM/YYYY
         dt = datetime.strptime(data_str, '%Y-%m-%d')
         return dt.strftime('%d/%m/%Y')
     except:
         return data_str
 
-# --- GERAÇÃO DE PDF PROFISSIONAL (NR-06) ---
+# --- GERAÇÃO DE PDF (NR-06) ---
 def gerar_pdf_ficha(f, df, titulo_doc):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", 'B', 14)
     pdf.cell(0, 8, "HOSPITAL UNIVERSITARIO DO CEARA - HUC - ISGH", ln=True, align='C')
     pdf.set_font("Arial", '', 10)
-    pdf.cell(0, 6, "CNPJ: 05.268.526/0024-67", ln=True, align='C') # CNPJ LIMPO
+    pdf.cell(0, 6, "CNPJ: 05.268.526/0024-67", ln=True, align='C') 
     pdf.ln(5)
     
     pdf.set_fill_color(240, 240, 240); pdf.set_font("Arial", 'B', 10)
-    pdf.cell(0, 8, " FICHA DE ENTREGA DE EPI - NR 06", ln=True, align='L', fill=True) # TÍTULO NR-06
+    pdf.cell(0, 8, " FICHA DE ENTREGA DE EPI - NR 06", ln=True, align='L', fill=True)
     pdf.ln(2)
     
     pdf.set_font("Arial", 'B', 9)
     pdf.cell(100, 7, f"NOME: {limpar_texto(f['nome'])}", 0)
     pdf.cell(90, 7, f"MATRICULA: {limpar_texto(f['matricula'])}", ln=True)
     pdf.cell(100, 7, f"FUNCAO: {limpar_texto(f['funcao'])}", 0)
-    pdf.cell(90, 7, f"ADMISSAO: {formatar_data_br(f['admissao'])}", ln=True) # DATA FORMATADA
+    pdf.cell(90, 7, f"ADMISSAO: {formatar_data_br(f['admissao'])}", ln=True) 
     pdf.cell(100, 7, f"SETOR: {limpar_texto(f['setor'])}", 0)
     pdf.cell(90, 7, f"VINCULO: {limpar_texto(f['vinculo'])}", ln=True); pdf.ln(5)
     
@@ -109,7 +108,7 @@ if not st.session_state.logado:
 # --- MENU ---
 menu = st.sidebar.radio("SESMT MENU", ["📊 Dashboard", "🚀 Entregar EPI", "👥 Funcionários", "📦 Catálogo", "📑 Relatórios", "⚙️ Configurações"])
 
-# --- DASHBOARD (COM REENVIAR TOKEN) ---
+# --- DASHBOARD (COM REENVIAR) ---
 if menu == "📊 Dashboard":
     st.markdown('<div class="main-header">📊 Dashboard de Entregas</div>', unsafe_allow_html=True)
     c.execute("SELECT url_sistema FROM config WHERE id=1"); url_base = c.fetchone()[0]
@@ -124,11 +123,10 @@ if menu == "📊 Dashboard":
         with col_info:
             cor = "red" if "Pendente" in row['status'] else "green"
             st.markdown(f"**{row['data']}** | {row['Colaborador']} - {row['EPI']} | <span style='color:{cor}'>{row['status']}</span>", unsafe_allow_html=True)
-        
         with col_btn:
             if "Pendente" in row['status']:
                 link = f"{url_base}/?confirmar={row['token']}"
-                msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nOlá! Confirmação pendente de EPI: {row['EPI']}\nLink: {link}")
+                msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nOlá! Lembrete de assinatura do EPI: {row['EPI']}\nLink: {link}")
                 st.markdown(f'''<a href="https://api.whatsapp.com/send?phone=55{row['whatsapp']}&text={msg}" target="_blank">
                                 <button style="background-color:#25D366; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">📲 REENVIAR</button></a>''', unsafe_allow_html=True)
 
@@ -153,7 +151,7 @@ elif menu == "🚀 Entregar EPI":
                 conn.commit()
                 link = f"{url_base}/?confirmar={tk}"
                 msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nConfirme seu EPI: {', '.join(e_sel)}\nLink: {link}")
-                st.markdown(f'<a href="https://api.whatsapp.com/send?phone=55{f_d["whatsapp"]}&text={msg}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:12px; border-radius:5px; font-weight:bold;">📲 ENVIAR WHATSAPP</button></a>', unsafe_allow_html=True)
+                st.markdown(f'<a href="https://api.whatsapp.com/send?phone=55{f_d["whatsapp"]}&text={msg}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:12px; border-radius:5px; font-weight:bold;">📲 WHATSAPP</button></a>', unsafe_allow_html=True)
 
 # --- CENTRAL DE FUNCIONÁRIOS ---
 elif menu == "👥 Funcionários":
@@ -165,7 +163,6 @@ elif menu == "👥 Funcionários":
             n, m, s = c1.text_input("Nome"), c2.text_input("Matrícula"), c3.text_input("Setor")
             c4, c5, c6 = st.columns(3)
             f, adm, w = c4.text_input("Função"), c5.text_input("Admissão (DD/MM/AAAA)"), c6.text_input("WhatsApp")
-            # ISGH como primeira opção
             v = st.selectbox("Vínculo", ["ISGH", "Cooperado", "Terceirizado"]) 
             if st.form_submit_button("Salvar"):
                 c.execute("INSERT INTO funcionarios (nome, matricula, setor, funcao, admissao, vinculo, whatsapp) VALUES (?,?,?,?,?,?,?)", (n,m,s,f,adm,v,w))
