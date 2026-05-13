@@ -38,14 +38,9 @@ conn.commit()
 def limpar_texto(texto):
     return str(texto).replace("✅", "").replace("⏳", "").replace("🛡️", "").strip().encode('latin-1', 'replace').decode('latin-1')
 
-def colorir_status(val):
-    if not isinstance(val, str): return ""
-    color = 'red' if 'Pendente' in val else 'green'
-    return f'color: {color}; font-weight: bold'
-
 def formatar_data_br(data_str):
     try:
-        dt = datetime.strptime(data_str, '%Y-%m-%d')
+        dt = datetime.strptime(str(data_str).strip(), '%Y-%m-%d')
         return dt.strftime('%d/%m/%Y')
     except:
         return data_str
@@ -89,13 +84,7 @@ def gerar_pdf_ficha(f, df, titulo_doc):
     pdf.cell(0, 10, "Rua Betel, s/n, no bairro Itaperi, em Fortaleza - CE", 0, 0, 'C')
     return pdf.output(dest='S').encode('latin-1')
 
-# --- LÓGICA DE ASSINATURA ---
-if "confirmar" in st.query_params:
-    tk = st.query_params["confirmar"]
-    c.execute("UPDATE entregas SET status = 'Confirmado ✅' WHERE token = ?", (tk,))
-    conn.commit(); st.balloons(); st.success("🛡️ Assinatura Confirmada!"); st.stop()
-
-# --- LOGIN ---
+# --- LOGIN E MENUS ---
 if 'logado' not in st.session_state: st.session_state.logado = False
 if not st.session_state.logado:
     st.markdown('<h1 style="text-align:center;">🛡️ SESMT HUC</h1>', unsafe_allow_html=True)
@@ -105,75 +94,40 @@ if not st.session_state.logado:
         if senha == c.fetchone()[0]: st.session_state.logado = True; st.rerun()
     st.stop()
 
-# --- MENU ---
 menu = st.sidebar.radio("SESMT MENU", ["📊 Dashboard", "🚀 Entregar EPI", "👥 Funcionários", "📦 Catálogo", "📑 Relatórios", "⚙️ Configurações"])
 
-# --- DASHBOARD (COM REENVIAR) ---
+# --- DASHBOARD COM REENVIAR TOKEN ---
 if menu == "📊 Dashboard":
     st.markdown('<div class="main-header">📊 Dashboard de Entregas</div>', unsafe_allow_html=True)
     c.execute("SELECT url_sistema FROM config WHERE id=1"); url_base = c.fetchone()[0]
-    
     res = pd.read_sql_query('''SELECT e.id, f.nome as Colaborador, f.whatsapp, ep.nome as EPI, e.data, e.status, e.token 
                                 FROM entregas e JOIN funcionarios f ON e.id_func = f.id 
-                                JOIN epis ep ON e.id_epi = ep.id ORDER BY e.id DESC LIMIT 15''', conn)
-    
-    st.write("### Últimas Atividades")
+                                JOIN epis ep ON e.id_epi = ep.id ORDER BY e.id DESC LIMIT 10''', conn)
     for idx, row in res.iterrows():
-        col_info, col_btn = st.columns([4, 1])
-        with col_info:
-            cor = "red" if "Pendente" in row['status'] else "green"
-            st.markdown(f"**{row['data']}** | {row['Colaborador']} - {row['EPI']} | <span style='color:{cor}'>{row['status']}</span>", unsafe_allow_html=True)
-        with col_btn:
-            if "Pendente" in row['status']:
-                link = f"{url_base}/?confirmar={row['token']}"
-                msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nOlá! Lembrete de assinatura do EPI: {row['EPI']}\nLink: {link}")
-                st.markdown(f'''<a href="https://api.whatsapp.com/send?phone=55{row['whatsapp']}&text={msg}" target="_blank">
-                                <button style="background-color:#25D366; color:white; border:none; padding:5px 10px; border-radius:5px; cursor:pointer;">📲 REENVIAR</button></a>''', unsafe_allow_html=True)
-
-# --- ENTREGAR EPI ---
-elif menu == "🚀 Entregar EPI":
-    st.markdown('<div class="main-header">🚀 Registrar Entrega</div>', unsafe_allow_html=True)
-    df_f = pd.read_sql_query("SELECT id, matricula, nome, whatsapp FROM funcionarios", conn)
-    df_e = pd.read_sql_query("SELECT id, nome, ca FROM epis", conn)
-    c.execute("SELECT url_sistema FROM config WHERE id=1"); url_base = c.fetchone()[0]
-    busca = st.text_input("🔍 Localizar Colaborador")
-    df_filt = df_f[df_f['nome'].str.contains(busca, case=False) | df_f['matricula'].str.contains(busca)] if busca else df_f
-    if not df_filt.empty:
-        f_sel = st.selectbox("Selecione", df_filt['matricula'] + " - " + df_filt['nome'])
-        e_sel = st.multiselect("EPIs", df_e['nome'] + " (CA: " + df_e['ca'] + ")")
-        if st.button("Gerar Entrega"):
-            if e_sel:
-                tk = str(random.randint(100000, 999999)); dt = datetime.now().strftime("%d/%m/%Y %H:%M")
-                f_d = df_filt[df_filt['matricula'] == f_sel.split(" - ")[0]].iloc[0]
-                for item in e_sel:
-                    epi_id = df_e[df_e['nome'] == item.split(" (CA: ")[0]].iloc[0]['id']
-                    c.execute("INSERT INTO entregas (id_func, id_epi, data, token) VALUES (?,?,?,?)", (int(f_d['id']), int(epi_id), dt, tk))
-                conn.commit()
-                link = f"{url_base}/?confirmar={tk}"
-                msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nConfirme seu EPI: {', '.join(e_sel)}\nLink: {link}")
-                st.markdown(f'<a href="https://api.whatsapp.com/send?phone=55{f_d["whatsapp"]}&text={msg}" target="_blank"><button style="width:100%; background-color:#25D366; color:white; border:none; padding:12px; border-radius:5px; font-weight:bold;">📲 WHATSAPP</button></a>', unsafe_allow_html=True)
+        c1, c2 = st.columns([4, 1])
+        c1.write(f"**{row['data']}** - {row['Colaborador']} ({row['EPI']}) - {row['status']}")
+        if "Pendente" in row['status']:
+            link = f"{url_base}/?confirmar={row['token']}"
+            msg = urllib.parse.quote(f"🛡️ *SESMT HUC*\nLembrete: Confirmação de EPI: {row['EPI']}\nLink: {link}")
+            c2.markdown(f'<a href="https://api.whatsapp.com/send?phone=55{row["whatsapp"]}&text={msg}" target="_blank"><button style="background-color:#25D366; color:white; border:none; padding:5px; border-radius:5px; cursor:pointer;">📲 REENVIAR</button></a>', unsafe_allow_html=True)
 
 # --- CENTRAL DE FUNCIONÁRIOS ---
 elif menu == "👥 Funcionários":
-    st.markdown('<div class="main-header">👥 Central de Cadastro</div>', unsafe_allow_html=True)
+    st.markdown('<div class="main-header">👥 Gestão de Colaboradores</div>', unsafe_allow_html=True)
     t_c, t_u = st.tabs(["➕ Novo Cadastro", "🔧 Editar e Excluir"])
     with t_c:
         with st.form("cad", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            n, m, s = c1.text_input("Nome"), c2.text_input("Matrícula"), c3.text_input("Setor")
-            c4, c5, c6 = st.columns(3)
-            f, adm, w = c4.text_input("Função"), c5.text_input("Admissão (DD/MM/AAAA)"), c6.text_input("WhatsApp")
-            v = st.selectbox("Vínculo", ["ISGH", "Cooperado", "Terceirizado"]) 
+            n, m, s = st.text_input("Nome"), st.text_input("Matrícula"), st.text_input("Setor")
+            f, adm, w = st.text_input("Função"), st.text_input("Admissão (AAAA-MM-DD)"), st.text_input("WhatsApp")
+            v = st.selectbox("Vínculo", ["ISGH", "Cooperado", "Terceirizado"]) # ISGH em primeiro
             if st.form_submit_button("Salvar"):
                 c.execute("INSERT INTO funcionarios (nome, matricula, setor, funcao, admissao, vinculo, whatsapp) VALUES (?,?,?,?,?,?,?)", (n,m,s,f,adm,v,w))
                 conn.commit(); st.success("Cadastrado!"); st.rerun()
     with t_u:
         df_f = pd.read_sql_query("SELECT * FROM funcionarios", conn)
-        setor_f = st.selectbox("🏢 Filtrar por Setor", ["Todos"] + sorted(df_f['setor'].unique().tolist()))
-        df_res = df_f[df_f['setor'] == setor_f] if setor_f != "Todos" else df_f
-        ed = st.data_editor(df_res, num_rows="dynamic", use_container_width=True)
+        ed = st.data_editor(df_f, num_rows="dynamic", use_container_width=True) # Excluir ativado
         if st.button("💾 Salvar Alterações"):
-            ed.to_sql('funcionarios', conn, if_exists='replace', index=False); st.success("OK!"); st.rerun()
+            ed.to_sql('funcionarios', conn, if_exists='replace', index=False); st.success("Sincronizado!"); st.rerun()
 
 # --- RELATÓRIOS ---
 elif menu == "📑 Relatórios":
@@ -184,17 +138,13 @@ elif menu == "📑 Relatórios":
         f_d = df_f[df_f['matricula'] == sel.split(" - ")[0]].iloc[0]
         h = pd.read_sql_query('''SELECT e.data, ep.nome, ep.ca, e.token, e.status FROM entregas e 
                                  JOIN epis ep ON e.id_epi = ep.id WHERE e.id_func = ? ORDER BY e.id DESC''', conn, params=(int(f_d['id']),))
-        st.dataframe(h.style.map(colorir_status, subset=['status']), use_container_width=True)
+        st.dataframe(h, use_container_width=True)
         if st.button("📥 Baixar FICHA DE ENTREGA DE EPI - NR 06"):
             st.download_button("Download", gerar_pdf_ficha(f_d, h, "FICHA DE ENTREGA DE EPI - NR 06"), f"Ficha_{f_d['matricula']}.pdf")
 
-# --- CATÁLOGO E CONFIG ---
-elif menu == "📦 Catálogo":
-    df_e = pd.read_sql_query("SELECT * FROM epis", conn)
-    ed_e = st.data_editor(df_e, num_rows="dynamic", use_container_width=True)
-    if st.button("Salvar"): ed_e.to_sql('epis', conn, if_exists='replace', index=False); st.rerun()
-
+# --- CONFIGURAÇÕES ---
 elif menu == "⚙️ Configurações":
     c.execute("SELECT url_sistema FROM config WHERE id=1"); url_at = c.fetchone()[0]
-    nova = st.text_input("URL Pública", url_at)
-    if st.button("Salvar URL"): c.execute("UPDATE config SET url_sistema = ?", (nova,)); conn.commit(); st.success("OK!")
+    nova = st.text_input("URL Pública do Sistema", url_at)
+    if st.button("Salvar URL"):
+        c.execute("UPDATE config SET url_sistema = ?", (nova,)); conn.commit(); st.success("URL Atualizada!")
