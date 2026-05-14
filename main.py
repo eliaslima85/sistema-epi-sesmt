@@ -38,6 +38,26 @@ def formatar_data_br(data_str):
     except:
         return str(data_str)
 
+def whatsapp_link(numero, mensagem):
+    """
+    Gera link compatível com WhatsApp Web e app mobile.
+    Usa web.whatsapp.com para funcionar diretamente no navegador.
+    O número deve conter apenas dígitos (ex: 85999990000).
+    """
+    numero_limpo = ''.join(filter(str.isdigit, str(numero)))
+    msg_encoded  = urllib.parse.quote(mensagem)
+    return f"https://web.whatsapp.com/send?phone=55{numero_limpo}&text={msg_encoded}"
+
+def botao_whatsapp_html(numero, mensagem, label="📲 ENVIAR PELO WHATSAPP", largura="100%", padding="15px", font_size="16px"):
+    """Retorna HTML de botão verde que abre o WhatsApp Web."""
+    href = whatsapp_link(numero, mensagem)
+    return (
+        f'<a href="{href}" target="_blank" rel="noopener noreferrer">'
+        f'<button style="width:{largura};background:#25D366;color:white;border:none;'
+        f'padding:{padding};border-radius:8px;font-weight:bold;font-size:{font_size};'
+        f'cursor:pointer;margin-top:8px;">{label}</button></a>'
+    )
+
 
 # --- GERAÇÃO DE PDF (FICHA DE ENTREGA DE EPI - NR 06) ---
 def gerar_pdf_ficha(f, df):
@@ -234,13 +254,24 @@ if menu == "📊 Dashboard":
             icon = "🟢" if "Confirmado" in status_txt else "🔴"
             c1.markdown(f"{icon} **{row['oficiais']['nome']}** — {row['ep']['nome']} — `{status_txt}`")
             if "Pendente" in status_txt:
-                link = f"{url_base}/?confirmar={row['token']}"
-                msg  = urllib.parse.quote(
-                    f"🛡️ *SESMT HUC*\nAssinatura de EPI pendente: {row['ep']['nome']}\nLink para assinar: {link}"
+                link_conf = f"{url_base}/?confirmar={row['token']}"
+                msg_reenv = (
+                    f"🛡️ *SESMT HUC — Hospital Universitário do Ceará*\n\n"
+                    f"Olá, *{row['oficiais']['nome']}*!\n\n"
+                    f"Seu recebimento de EPI ainda está *pendente de confirmação*.\n\n"
+                    f"📦 EPI: {row['ep']['nome']}\n"
+                    f"🔑 Token: *{row['token']}*\n\n"
+                    f"Por favor, confirme clicando no link:\n{link_conf}"
                 )
                 c2.markdown(
-                    f'<a href="https://api.whatsapp.com/send?phone=55{row["oficiais"]["whatsapp"]}&text={msg}" target="_blank">'
-                    f'<button style="background:#25D366;color:white;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;width:100%;font-weight:bold;">📲 Reenviar</button></a>',
+                    botao_whatsapp_html(
+                        row["oficiais"]["whatsapp"],
+                        msg_reenv,
+                        label="📲 Reenviar",
+                        largura="100%",
+                        padding="6px 10px",
+                        font_size="13px"
+                    ),
                     unsafe_allow_html=True
                 )
 
@@ -381,21 +412,21 @@ elif menu == "🚀 Entregar EPI":
 
                 link = f"{url_base}/?confirmar={tk}"
                 nomes_epi = ', '.join([i.split("  (C.A.:")[0] for i in sel_items])
-                msg  = urllib.parse.quote(
+                st.success(f"✅ Entrega registrada! Token: **{tk}**")
+
+                msg_envio = (
                     f"🛡️ *SESMT HUC — Hospital Universitário do Ceará*\n\n"
                     f"Olá, *{f_d['nome']}*!\n\n"
                     f"Foi registrada a entrega dos seguintes EPIs:\n"
                     f"• {nomes_epi}\n\n"
                     f"Por favor, confirme o recebimento clicando no link abaixo:\n{link}\n\n"
-                    f"Token: *{tk}*"
+                    f"🔑 Token: *{tk}*"
                 )
-                st.success(f"✅ Entrega registrada! Token: **{tk}**")
                 st.markdown(
-                    f'<a href="https://api.whatsapp.com/send?phone=55{f_d["whatsapp"]}&text={msg}" target="_blank">'
-                    f'<button style="width:100%;background:#25D366;color:white;border:none;padding:15px;'
-                    f'border-radius:8px;font-weight:bold;font-size:16px;cursor:pointer;">📲 ENVIAR AGORA PELO WHATSAPP</button></a>',
+                    botao_whatsapp_html(f_d["whatsapp"], msg_envio, label="📲 ENVIAR AGORA PELO WHATSAPP"),
                     unsafe_allow_html=True
                 )
+                st.info("💡 **Dica:** O link abre o WhatsApp Web direto no navegador. Basta clicar em Enviar na conversa.")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
