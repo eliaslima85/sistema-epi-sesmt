@@ -127,8 +127,8 @@ if menu == "📊 Dashboard":
 elif menu == "🚀 Entregar EPI":
     st.markdown("### 🚀 Registrar Entrega")
     df_f = pd.DataFrame(supabase.table("oficiais").select("*").not_.eq("matricula", "URL_SISTEMA").execute().data)
-    # Busca apenas EPIs ativos
-    df_e = pd.DataFrame(supabase.table("ep").select("*").eq("ativo", True).execute().data)
+    # Busca EPIs ativos (ativo=true ou ativo=null para compatibilidade com registros antigos)
+    df_e = pd.DataFrame(supabase.table("ep").select("*").or_("ativo.eq.true,ativo.is.null").execute().data)
 
     if not df_f.empty and not df_e.empty:
         colab = st.selectbox("Selecione o Colaborador", df_f['matricula'] + " - " + df_f['nome'])
@@ -216,7 +216,7 @@ elif menu == "📦 Catálogo":
                 st.success("EPI Cadastrado!"); st.rerun()
 
     with t2:
-        df_ativos = pd.DataFrame(supabase.table("ep").select("*").eq("ativo", True).execute().data)
+        df_ativos = pd.DataFrame(supabase.table("ep").select("*").or_("ativo.eq.true,ativo.is.null").execute().data)
         if df_ativos.empty:
             st.info("Nenhum EPI ativo cadastrado.")
         else:
