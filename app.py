@@ -5,6 +5,8 @@ import pandas as pd
 from datetime import datetime, timedelta
 import urllib.parse
 from fpdf import FPDF
+import zipfile
+import io
 
 # --- CREDENCIAIS SUPABASE ---
 SUPABASE_URL = "aatkjhtrafuepwzzlrbm"
@@ -191,6 +193,8 @@ elif menu == "📄 Ficha de EPI":
     st.markdown("### 📄 Ficha de Entrega de EPI")
     df_f = pd.DataFrame(supabase.table("oficiais").select("*").not_.eq("matricula", "URL_SISTEMA").execute().data)
     if not df_f.empty:
+
+        # --- DOWNLOAD INDIVIDUAL ---
         sel = st.selectbox("Selecione o Colaborador", df_f['matricula'] + " - " + df_f['nome'])
         f_d = df_f[df_f['matricula'] == sel.split(" - ")[0]].iloc[0]
         h_res = supabase.table("entregas").select("data_entrega, token, status, quantidade, ep(nome, ca, validade)").eq("id_func", int(f_d['id'])).execute()
@@ -200,6 +204,28 @@ elif menu == "📄 Ficha de EPI":
             st.dataframe(df_h[['data_entrega', 'quantidade', 'epi_nome', 'ca', 'validade_epi', 'status']], use_container_width=True)
             if st.button(f"📥 Gerar Ficha de {f_d['nome']}"):
                 st.download_button("Baixar Agora", gerar_pdf_ficha(f_d, df_h), f"Ficha_{f_d['nome']}.pdf")
+
+        st.divider()
+
+        # --- DOWNLOAD DE TODAS EM ZIP ---
+        st.markdown("#### 📦 Baixar Todas as Fichas em ZIP")
+        if st.button("🗂️ Gerar ZIP com Todas as Fichas"):
+            zip_buf = io.BytesIO()
+            total = 0
+            with st.spinner("Gerando fichas..."):
+                with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                    for _, func in df_f.iterrows():
+                        res_h = supabase.table("entregas").select("data_entrega, token, status, quantidade, ep(nome, ca, validade)").eq("id_func", int(func['id'])).execute()
+                        if res_h.data:
+                            dados = [{"data_entrega": r['data_entrega'], "quantidade": r.get('quantidade', 1), "epi_nome": r['ep']['nome'], "ca": r['ep']['ca'], "validade_epi": r['ep']['validade'], "token": r['token'], "status": r['status']} for r in res_h.data]
+                            df_func = pd.DataFrame(dados)
+                            pdf_bytes = gerar_pdf_ficha(func, df_func)
+                            nome_arquivo = f"Ficha_{func['matricula']}_{func['nome'].replace(' ', '_')}.pdf"
+                            zf.writestr(nome_arquivo, pdf_bytes)
+                            total += 1
+            zip_buf.seek(0)
+            st.success(f"{total} ficha(s) gerada(s).")
+            st.download_button("📥 Baixar ZIP", zip_buf.getvalue(), "Fichas_EPI_Todas.zip", mime="application/zip")
 
 # --- CATÁLOGO ---
 elif menu == "📦 Catálogo":
