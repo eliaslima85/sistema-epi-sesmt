@@ -295,3 +295,5 @@ elif menu == "⚙️ Configurações":
     if st.button("Salvar"):
         supabase.table("oficiais").upsert({"matricula": "URL_SISTEMA", "whatsapp": nova_url}).execute()
         st.success("URL Salva!")
+
+
