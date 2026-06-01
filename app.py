@@ -297,3 +297,4 @@ elif menu == "⚙️ Configurações":
         st.success("URL Salva!")
 
 
+
